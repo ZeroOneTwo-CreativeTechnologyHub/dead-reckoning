@@ -1,130 +1,123 @@
 #include "display.h"
 #include "shared_state.h"
-#include "heltec.h"
+#include "heltec_unofficial.h"
 
-#define BTN_PRG        0     // GPIO0 — PRG button on Heltec V3
-#define BTN_HOLD_MS  2000    // Hold duration to clear stats
+// PRG button is handled by heltec_unofficial via heltec_loop()
+// We use heltec_button_was_pressed() for short press detection
+// and track hold time manually for the long-press clear
+
+#define BTN_HOLD_MS 2000
 
 static uint32_t btnPressedAt = 0;
 static bool     btnWasHeld   = false;
 
-// ─── Init ─────────────────────────────────────────────────
 void displayInit() {
-  pinMode(BTN_PRG, INPUT_PULLUP);
-  Heltec.display->clear();
-  Heltec.display->display();
+  display.clear();
+  display.display();
 }
 
-// ─── Splash ───────────────────────────────────────────────
 void displaySplash() {
-  Heltec.display->clear();
-  Heltec.display->setFont(ArialMT_Plain_16);
-  Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
-  Heltec.display->drawString(64, 6, "DEAD");
-  Heltec.display->drawString(64, 24, "RECKONING");
-  Heltec.display->setFont(ArialMT_Plain_10);
-  Heltec.display->drawString(64, 46, "no carrier. no cloud.");
-  Heltec.display->display();
+  display.clear();
+  display.setFont(ArialMT_Plain_16);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(64, 6,  "DEAD");
+  display.drawString(64, 24, "RECKONING");
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(64, 46, "no carrier. no cloud.");
+  display.display();
 }
-
-// ─── Screen renderers ─────────────────────────────────────
 
 static void drawScreenMesh() {
-  Heltec.display->clear();
+  display.clear();
   if (!sharedState.lock()) return;
 
-  uint32_t sent     = sharedState.msgs_sent;
-  uint32_t recv     = sharedState.msgs_received;
-  uint32_t relayed  = sharedState.msgs_relayed;
+  uint32_t recv    = sharedState.msgs_received;
+  uint32_t relayed = sharedState.msgs_relayed;
   char     last[32] = "";
   bool     hasMsg   = sharedState.has_last_msg;
   if (hasMsg) strncpy(last, sharedState.last_msg, 31);
 
   sharedState.unlock();
 
-  Heltec.display->setFont(ArialMT_Plain_10);
-  Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
-  Heltec.display->drawString(0, 0,  "MESH");
-  Heltec.display->drawHorizontalLine(0, 12, 128);
+  display.setFont(ArialMT_Plain_10);
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.drawString(0, 0, "MESH");
+  display.drawHorizontalLine(0, 12, 128);
 
   char buf[32];
-  snprintf(buf, sizeof(buf), "SENT     %lu", sent);
-  Heltec.display->drawString(0, 15, buf);
   snprintf(buf, sizeof(buf), "RECEIVED %lu", recv);
-  Heltec.display->drawString(0, 26, buf);
+  display.drawString(0, 15, buf);
   snprintf(buf, sizeof(buf), "RELAYED  %lu", relayed);
-  Heltec.display->drawString(0, 37, buf);
+  display.drawString(0, 26, buf);
 
   if (hasMsg) {
-    Heltec.display->drawHorizontalLine(0, 50, 128);
-    Heltec.display->drawString(0, 52, last);
+    display.drawHorizontalLine(0, 39, 128);
+    display.drawString(0, 42, last);
   }
 
-  Heltec.display->display();
+  display.display();
 }
 
 static void drawScreenProbes() {
-  Heltec.display->clear();
+  display.clear();
   if (!sharedState.lock()) return;
 
-  uint32_t total   = sharedState.devices_total;
-  uint32_t unique  = sharedState.devices_unique;
+  uint32_t total  = sharedState.devices_total;
+  uint32_t unique = sharedState.devices_unique;
   char     ssid[33] = "";
-  uint32_t ssidCnt = sharedState.topSSIDCount();
+  uint32_t ssidCnt  = sharedState.topSSIDCount();
   strncpy(ssid, sharedState.topSSID(), 32);
 
   sharedState.unlock();
 
-  Heltec.display->setFont(ArialMT_Plain_10);
-  Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
-  Heltec.display->drawString(0, 0,  "ENVIRONMENT");
-  Heltec.display->drawHorizontalLine(0, 12, 128);
+  display.setFont(ArialMT_Plain_10);
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.drawString(0, 0, "ENVIRONMENT");
+  display.drawHorizontalLine(0, 12, 128);
 
   char buf[32];
   snprintf(buf, sizeof(buf), "PROBES   %lu", total);
-  Heltec.display->drawString(0, 15, buf);
+  display.drawString(0, 15, buf);
   snprintf(buf, sizeof(buf), "UNIQUE   %lu", unique);
-  Heltec.display->drawString(0, 26, buf);
+  display.drawString(0, 26, buf);
 
-  Heltec.display->drawHorizontalLine(0, 39, 128);
+  display.drawHorizontalLine(0, 39, 128);
   snprintf(buf, sizeof(buf), "TOP SSID (%lu)", ssidCnt);
-  Heltec.display->drawString(0, 41, buf);
+  display.drawString(0, 41, buf);
 
-  // Truncate SSID to fit display width (approx 21 chars at font10)
   char ssidTrunc[22];
   strncpy(ssidTrunc, ssid, 21);
   ssidTrunc[21] = '\0';
-  Heltec.display->drawString(0, 52, ssidTrunc);
+  display.drawString(0, 52, ssidTrunc);
 
-  Heltec.display->display();
+  display.display();
 }
 
 static void drawScreenAbout() {
-  Heltec.display->clear();
+  display.clear();
 
   uint32_t uptimeSec = (millis() - sharedState.start_time_ms) / 1000;
   uint32_t h = uptimeSec / 3600;
   uint32_t m = (uptimeSec % 3600) / 60;
   uint32_t s = uptimeSec % 60;
 
-  Heltec.display->setFont(ArialMT_Plain_10);
-  Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
-  Heltec.display->drawString(0, 0,  "DEAD RECKONING");
-  Heltec.display->drawHorizontalLine(0, 12, 128);
-  Heltec.display->drawString(0, 15, "NO SIM. NO CARRIER.");
-  Heltec.display->drawString(0, 26, "NO CLOUD. NO CONSENT.");
-  Heltec.display->drawString(0, 37, "WITNESS ONLY.");
+  display.setFont(ArialMT_Plain_10);
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.drawString(0, 0,  "DEAD RECKONING");
+  display.drawHorizontalLine(0, 12, 128);
+  display.drawString(0, 15, "NO SIM. NO CARRIER.");
+  display.drawString(0, 26, "NO CLOUD. NO CONSENT.");
+  display.drawString(0, 37, "WITNESS ONLY.");
 
   char upbuf[20];
   snprintf(upbuf, sizeof(upbuf), "UP %02lu:%02lu:%02lu", h, m, s);
-  Heltec.display->drawString(0, 50, upbuf);
+  display.drawString(0, 50, upbuf);
 
-  Heltec.display->display();
+  display.display();
 }
 
-// ─── Button handling ──────────────────────────────────────
 static void handleButton() {
-  bool pressed = (digitalRead(BTN_PRG) == LOW);
+  bool pressed = heltec_button_is_pressed();
 
   if (pressed && btnPressedAt == 0) {
     btnPressedAt = millis();
@@ -141,17 +134,16 @@ static void handleButton() {
       sharedState.unlock();
     }
     btnWasHeld = true;
-    // Brief flash to confirm
-    Heltec.display->clear();
-    Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
-    Heltec.display->drawString(64, 26, "STATS CLEARED");
-    Heltec.display->display();
+    display.clear();
+    display.setTextAlignment(TEXT_ALIGN_CENTER);
+    display.drawString(64, 26, "STATS CLEARED");
+    display.display();
     delay(800);
   }
 
   if (!pressed && btnPressedAt != 0) {
-    // Short press released: toggle freeze
     if (!btnWasHeld) {
+      // Short press: toggle screen freeze
       if (sharedState.lock()) {
         sharedState.screen_frozen = !sharedState.screen_frozen;
         sharedState.unlock();
@@ -162,12 +154,11 @@ static void handleButton() {
   }
 }
 
-// ─── Main update — called from loop() ─────────────────────
 void displayUpdate() {
   handleButton();
 
-  bool frozen = false;
-  uint8_t screen = SCREEN_MESH;
+  bool     frozen  = false;
+  uint8_t  screen  = SCREEN_MESH;
   uint32_t changed = 0;
 
   if (sharedState.lock()) {
@@ -177,7 +168,6 @@ void displayUpdate() {
     sharedState.unlock();
   }
 
-  // Advance screen on timer if not frozen
   if (!frozen && (millis() - changed) > SCREEN_DWELL) {
     if (sharedState.lock()) {
       sharedState.current_screen = (sharedState.current_screen + 1) % SCREEN_COUNT;

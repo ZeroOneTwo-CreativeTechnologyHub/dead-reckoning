@@ -4,9 +4,9 @@
  * A Critical Engineering project for the Heltec WiFi LoRa 32 V3
  *
  * Three concurrent tasks:
- *   Core 0 — LoRa mesh comms (send/receive messages via LoRa)
+ *   Core 0 — LoRa receive/relay (witness and relay, no origination)
  *   Core 1 — WiFi probe sniffer (passive, hashed MACs only)
- *   Main    — OLED display cycling between mesh and sniffer stats
+ *   Main   — OLED display cycling between mesh and sniffer stats
  *
  * Manifesto alignment:
  *   Principle 1  — technology studied, not merely consumed
@@ -19,63 +19,39 @@
  */
 
 #include <Arduino.h>
-#include <Wire.h>
-#include <SPI.h>
-#include "heltec.h"
+#include "heltec_unofficial.h"
 #include "display.h"
 #include "lora_mesh.h"
 #include "probe_sniffer.h"
 #include "shared_state.h"
 
-// ─── Task handles ─────────────────────────────────────────
-TaskHandle_t loraTaskHandle   = NULL;
+TaskHandle_t loraTaskHandle    = NULL;
 TaskHandle_t snifferTaskHandle = NULL;
 
-// ─── Setup ────────────────────────────────────────────────
 void setup() {
   Serial.begin(115200);
 
-  // Initialise Heltec board (OLED, LoRa, LED)
-  Heltec.begin(
-    true,   // OLED enable
-    true,   // LoRa enable
-    true,   // Serial enable
-    true,   // PABOOST enable
-    868E6   // 868 MHz — UK/EU band
-  );
+  // Initialise Heltec V3 board (OLED + power management)
+  heltec_setup();
 
   sharedState.init();
   displayInit();
-
-  // Splash screen
   displaySplash();
   delay(2000);
 
-  // Spawn LoRa mesh task on Core 0
+  // LoRa mesh task on Core 0
   xTaskCreatePinnedToCore(
-    loraTask,
-    "lora_mesh",
-    8192,
-    NULL,
-    2,
-    &loraTaskHandle,
-    0
+    loraTask, "lora_mesh", 8192, NULL, 2, &loraTaskHandle, 0
   );
 
-  // Spawn WiFi sniffer task on Core 1
+  // WiFi probe sniffer on Core 1
   xTaskCreatePinnedToCore(
-    snifferTask,
-    "probe_sniffer",
-    8192,
-    NULL,
-    1,
-    &snifferTaskHandle,
-    1
+    snifferTask, "probe_sniffer", 8192, NULL, 1, &snifferTaskHandle, 1
   );
 }
 
-// ─── Main loop — display cycling ──────────────────────────
 void loop() {
+  heltec_loop();       // Required by ropg library (handles button, battery)
   displayUpdate();
   delay(100);
 }
