@@ -1,0 +1,19 @@
+{
+  "name": "Dead Reckoning",
+  "version": "1.0.0",
+  "home_assistant_domain": null,
+  "funding_url": "https://github.com/ZeroOneTwo-CreativeTechnologyHub/dead-reckoning",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "improv": false,
+      "parts": [
+        {
+          "path": "firmware.bin",
+          "offset": 0
+        }
+      ]
+    }
+  ]
+}
