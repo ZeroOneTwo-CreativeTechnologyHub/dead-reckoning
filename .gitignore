@@ -1,1 +1,19 @@
+# PlatformIO
+firmware/.pio/
+firmware/.vscode/
+
+# Build output — placeholder committed; real binary written by CI
+# docs/assets/firmware.bin
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
 .DS_Store
+
+# Editor
+*.swp
+*.swo
+.idea/

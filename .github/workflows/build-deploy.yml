@@ -1,0 +1,76 @@
+name: Build firmware and deploy Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # ── Compile firmware ────────────────────────────────────
+  build-firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('firmware/platformio.ini') }}
+
+      - name: Install PlatformIO and esptool
+        run: pip install platformio esptool
+
+      - name: Compile firmware
+        working-directory: firmware
+        run: pio run
+
+      - name: Verify merged binary
+        run: test -f docs/assets/firmware.bin && echo "firmware.bin OK"
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-bin
+          path: docs/assets/firmware.bin
+          if-no-files-found: error
+
+  # ── Deploy GitHub Pages ─────────────────────────────────
+  # Runs independently — Pages stays live even if firmware
+  # compilation fails during development.
+  deploy-pages:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Use compiled binary if available, otherwise use placeholder
+      - name: Download compiled firmware (if available)
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-bin
+          path: docs/assets/
+        continue-on-error: true
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
