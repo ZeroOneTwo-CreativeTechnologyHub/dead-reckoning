@@ -1,0 +1,36 @@
+name: Build firmware
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firmware/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('firmware/platformio.ini') }}
+
+      - name: Install PlatformIO and esptool
+        run: pip install platformio esptool
+
+      - name: Compile firmware
+        working-directory: firmware
+        run: pio run
+
+      - name: Verify merged binary
+        run: test -f docs/assets/firmware.bin && echo "firmware.bin OK"
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-bin
+          path: docs/assets/firmware.bin
